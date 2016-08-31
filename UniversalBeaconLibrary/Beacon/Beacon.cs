@@ -25,6 +25,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Devices.Bluetooth.Advertisement;
 using UniversalBeaconLibrary.Annotations;
+using System.Diagnostics;
+using System.IO;
+
 
 namespace UniversalBeaconLibrary.Beacon
 {
@@ -56,7 +59,30 @@ namespace UniversalBeaconLibrary.Beacon
             /// iBeacon is a Trademark of Apple Inc.
             /// Note: the beacon broadcast payload is not parsed by this library.
             /// </summary>
-            iBeacon
+            iBeacon,
+            /// <summary>
+            /// Beacon conforming to the Estimote Nearable specification.
+            /// </summary>
+            EstimoteNearable,
+            /// <summary>
+            /// Beacon conforming to the Estimote Stone specification.
+            /// </summary>
+            EstimoteStone
+        }
+
+        /// <summary>
+        /// In Estimote's protocol standard address varies, so we need to hack it
+        /// </summary>
+        /// <param name="btAdv"></param>
+        /// <returns></returns>
+        public bool CheckAddress(BluetoothLEAdvertisementReceivedEventArgs btAdv)
+        {
+            if(this.BeaconType == BeaconTypeEnum.EstimoteNearable || this.BeaconType == BeaconTypeEnum.EstimoteStone)
+            {
+                return Enumerable.SequenceEqual(this.BluetoothAddress, GetEstimoteAddress(btAdv));
+            }
+
+            return BitConverter.GetBytes(btAdv.BluetoothAddress) == this.BluetoothAddress;
         }
 
         /// <summary>
@@ -89,13 +115,13 @@ namespace UniversalBeaconLibrary.Beacon
             }
         }
 
-        private ulong _bluetoothAddress;
+        private byte[] _bluetoothAddress;
         /// <summary>
         /// The Bluetooth MAC address.
         /// Used to cluster the different received Bluetooth advertisements and to
         /// collect multiple advertisements for unique beacons.
         /// </summary>
-        public ulong BluetoothAddress
+        public byte[] BluetoothAddress
         {
             get { return _bluetoothAddress; }
             set
@@ -114,7 +140,7 @@ namespace UniversalBeaconLibrary.Beacon
         {
             get
             {
-                return string.Join(":", BitConverter.GetBytes(BluetoothAddress).Reverse().Select(b => b.ToString("X2"))).Substring(6);
+                return BitConverter.ToString(BluetoothAddress).Replace("-", "").ToLower();
             }
         }
 
@@ -141,7 +167,6 @@ namespace UniversalBeaconLibrary.Beacon
         /// the Windows Bluetooth LE API.</param>
         public Beacon(BluetoothLEAdvertisementReceivedEventArgs btAdv)
         {
-            BluetoothAddress = btAdv.BluetoothAddress;
             UpdateBeacon(btAdv);
         }
 
@@ -165,21 +190,16 @@ namespace UniversalBeaconLibrary.Beacon
         {
             if (btAdv == null) return;
 
-            if (btAdv.BluetoothAddress != BluetoothAddress)
-            {
-                throw new BeaconException("Bluetooth address of beacon does not match - not updating beacon information");
-            }
-
             Rssi = btAdv.RawSignalStrengthInDBm;
             Timestamp = btAdv.Timestamp;
 
             //Debug.WriteLine($"Beacon advertisment detected (Strength: {Rssi}): Address: {BluetoothAddress}");
-
+           
             // Check if beacon advertisement contains any actual usable data
             if (btAdv.Advertisement == null) return;
 
             if (btAdv.Advertisement.ServiceUuids.Any())
-            {
+            {                
                 foreach (var serviceUuid in btAdv.Advertisement.ServiceUuids)
                 {
                     // If we have multiple service UUIDs and already recognized a beacon type, 
@@ -204,16 +224,6 @@ namespace UniversalBeaconLibrary.Beacon
                 {
                     // This beacon is according to the Eddystone specification - parse data
                     ParseEddystoneData(btAdv);
-                }
-                else if (BeaconType == BeaconTypeEnum.Unknown)
-                {
-                    // Unknown beacon type
-                    //Debug.WriteLine("\nUnknown beacon");
-                    //foreach (var dataSection in btAdv.Advertisement.DataSections)
-                    //{
-                    //    Debug.WriteLine("Data section 0x: " + dataSection.DataType.ToString("X") + " = " + 
-                    //        BitConverter.ToString(dataSection.Data.ToArray()));
-                    //}
                 }
             }
 
@@ -241,8 +251,72 @@ namespace UniversalBeaconLibrary.Beacon
                             BeaconFrames.Add(new UnknownBeaconFrame(manufacturerDataArry));
                         }
                     }
+                    else if ((manufacturerData.CompanyId & 0x150) == 0x150)
+                    {
+                        BluetoothAddress = GetEstimoteAddress(btAdv);
+
+                        if (BeaconFrames.Any())
+                        {
+                            BeaconFrames[0].Payload = manufacturerDataArry;
+                            ((EstimoteNearableFrame)BeaconFrames[0]).ParsePayload();
+                        }
+
+                        if (manufacturerDataArry[0] == 0x01)
+                        {
+                            BeaconType = BeaconTypeEnum.EstimoteNearable;
+
+                            EstimoteNearableFrame enf = new EstimoteNearableFrame(manufacturerDataArry);
+                            enf.PropertyChanged += Enf_PropertyChanged;
+                            if (!BeaconFrames.Any())
+                            {
+                                BeaconFrames.Add(enf);
+                            }
+                        }
+                        else
+                        {
+                            BeaconType = BeaconTypeEnum.EstimoteStone;
+                        }
+                    }
                 }
             }
+
+            if(_bluetoothAddress == null)
+            {
+                BluetoothAddress = BitConverter.GetBytes(btAdv.BluetoothAddress);
+            }
+
+            //if (!CheckAddress(btAdv))
+            //{
+            //    throw new BeaconException("Bluetooth address of beacon does not match - not updating beacon information");
+            //}
+        }
+
+        private void Enf_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if(e.PropertyName == "isMoving")
+            {
+                OnPropertyChanged(e.PropertyName);
+            }
+        }
+
+        private byte[] GetEstimoteAddress(BluetoothLEAdvertisementReceivedEventArgs btAdv)
+        {
+            if (btAdv.Advertisement.ManufacturerData.Any())
+            {
+                foreach (var manufacturerData in btAdv.Advertisement.ManufacturerData)
+                {
+                    using (var ms = new MemoryStream(manufacturerData.Data.ToArray(), false))
+                    {
+                        using (var reader = new BinaryReader(ms))
+                        {
+                            ms.Position = 1;
+                            return reader.ReadBytes(8);
+                        }
+                    }
+                }
+            }
+
+            return new byte[]{ };
         }
 
         private void ParseEddystoneData(BluetoothLEAdvertisementReceivedEventArgs btAdv)

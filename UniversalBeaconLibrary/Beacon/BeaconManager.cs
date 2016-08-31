@@ -18,8 +18,11 @@
 // limitations under the License. 
 
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using Windows.Devices.Bluetooth.Advertisement;
-
+using UniversalBeaconLibrary.Beacon;
+using System;
+using System.Diagnostics;
 namespace UniversalBeaconLibrary.Beacon
 {
     /// <summary>
@@ -39,7 +42,6 @@ namespace UniversalBeaconLibrary.Beacon
         /// and can have multiple data frames.
         /// </summary>
         public ObservableCollection<Beacon> BluetoothBeacons { get; set; } = new ObservableCollection<Beacon>();
-
         /// <summary>
         /// Analyze the received Bluetooth LE advertisement, and either add a new unique
         /// beacon to the list of known beacons, or update a previously known beacon
@@ -54,7 +56,7 @@ namespace UniversalBeaconLibrary.Beacon
             // Check if we already know this bluetooth address
             foreach (var bluetoothBeacon in BluetoothBeacons)
             {
-                if (bluetoothBeacon.BluetoothAddress == btAdv.BluetoothAddress)
+                if (bluetoothBeacon.CheckAddress(btAdv))
                 {
                     // We already know this beacon
                     // Update / Add info to existing beacon
@@ -63,9 +65,34 @@ namespace UniversalBeaconLibrary.Beacon
                 }
             }
 
+            for(int i = BluetoothBeacons.Count - 1; i>=0; i--)
+            {
+                if ((DateTimeOffset.Now - BluetoothBeacons[i].Timestamp).Seconds > 10)
+                {
+                    BluetoothBeacons.Remove(BluetoothBeacons[i]);
+                }
+            }
+
             // Beacon was not yet known - add it to the list.
             var newBeacon = new Beacon(btAdv);
-            BluetoothBeacons.Add(newBeacon);
+            Beacon.BeaconTypeEnum[] filter = { Beacon.BeaconTypeEnum.EstimoteStone, Beacon.BeaconTypeEnum.EstimoteNearable };
+            if (Array.IndexOf(filter, newBeacon.BeaconType) > -1)
+            {
+                BluetoothBeacons.Add(newBeacon);
+                if(newBeacon.BluetoothAddressAsString == "60202cd8293ba3d9")
+                {
+                    newBeacon.PropertyChanged += NewBeacon_PropertyChanged;
+                }
+            }
+        }
+
+        private void NewBeacon_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if(e.PropertyName == "isMoving")
+            {
+                Debug.WriteLine("moved");
+            }
+          
         }
     }
 }

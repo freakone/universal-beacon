@@ -197,10 +197,59 @@
             </Grid>
         </DataTemplate>
 
+        <DataTemplate x:Key="EstimoteNearableFrameTemplate">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="{Binding ElementName=MainPageItem, Path=LeftColumnWidth, Converter={StaticResource IntToGridLengthConverter}}"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition/>
+                    <RowDefinition/>
+                    <RowDefinition/>
+                    <RowDefinition/>
+                </Grid.RowDefinitions>
+                <!-- Frame type -->
+                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                           Text="{Binding Converter={StaticResource BeaconFrameTypeToTextConverter}}"
+                           TextWrapping="Wrap"
+                           Style="{StaticResource FrameTypeTextBlockStyle}"/>
+                <!-- Payload -->
+                <TextBlock Grid.Row="1" Grid.Column="0"
+                           Text="Uuid"
+                           TextWrapping="Wrap"
+                           Style="{StaticResource BoldInfoTextBlockStyle}"/>
+                <TextBlock Grid.Row="1" Grid.Column="1"
+                           Text="{Binding Uuid, Mode=OneWay}"
+                           TextWrapping="Wrap"
+                           Style="{StaticResource InfoTextBlockStyle}"/>
+
+                <!-- Payload -->
+                <TextBlock Grid.Row="2" Grid.Column="0"
+                           Text="Acc X"
+                           TextWrapping="Wrap"
+                           Style="{StaticResource BoldInfoTextBlockStyle}"/>
+                <TextBlock Grid.Row="2" Grid.Column="1"
+                           Text="{Binding Xacc, Mode=OneWay}"
+                           TextWrapping="Wrap"
+                           Style="{StaticResource InfoTextBlockStyle}"/>
+                <!-- Payload -->
+                <TextBlock Grid.Row="3" Grid.Column="0"
+                           Text="Moving"
+                           TextWrapping="Wrap"
+                           Style="{StaticResource BoldInfoTextBlockStyle}"/>
+                <TextBlock Grid.Row="3" Grid.Column="1"
+                           Text="{Binding isMoving, Mode=OneWay}"
+                           TextWrapping="Wrap"
+                           Style="{StaticResource InfoTextBlockStyle}"/>
+            </Grid>
+        </DataTemplate>
+
         <local:FrameTemplateSelector x:Key="FrameTemplateSelector"
                                      UrlEddystoneFrameTemplate="{StaticResource UrlEddystoneFrameTemplate}"
                                      TlmEddystoneFrameTemplate="{StaticResource TlmEddystoneFrameTemplate}"
                                      UidEddystoneFrameTemplate="{StaticResource UidEddystoneFrameTemplate}"
+                                     EstimoteNearableFrameTemplate="{StaticResource EstimoteNearableFrameTemplate}"
                                      UnknownBeaconFrameTemplate="{StaticResource UnknownBeaconFrameTemplate}"/>
 
         <DataTemplate x:Name="BeaconInfoTemplate">

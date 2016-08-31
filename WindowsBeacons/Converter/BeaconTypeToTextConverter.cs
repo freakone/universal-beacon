@@ -35,6 +35,10 @@ namespace WindowsBeacons.Converter
                         return "Eddystone";
                     case Beacon.BeaconTypeEnum.iBeacon:
                         return "iBeacon";
+                    case Beacon.BeaconTypeEnum.EstimoteNearable:
+                        return "Estimote Nearable Sticker";
+                    case Beacon.BeaconTypeEnum.EstimoteStone:
+                        return "Estimote Stone Beacon";
                     default:
                         throw new ArgumentOutOfRangeException();
                 }
